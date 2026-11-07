@@ -1,0 +1,57 @@
+node_modules/
+.next/
+dist/
+build/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+
+# Local SQLite databases, sidecars, and renamed database copies
+*.db
+*.db-*
+*.db.*
+*.sqlite
+*.sqlite-*
+*.sqlite.*
+*.sqlite3
+*.sqlite3-*
+*.sqlite3.*
+
+# Runtime backups and exports (keep source CSV fixtures trackable)
+backups/
+snapshots/
+exports/
+*.bak
+*.backup
+
+# Local credentials and key material
+.aws/
+.ssh/
+credentials.json
+credentials.*.json
+*.dpapi
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+
+# Local repository transport archives
+*.bundle
+
+# Claude Code local work files
+.claude/work/
+.claude/settings.local.json
+
+# Local development data (per checkout)
+.data/
+
+# Close-out scripts for GitHub writes (run by the owner; not committed)
+.claude/out/

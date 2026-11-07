@@ -1,0 +1,6 @@
+#!/bin/bash
+# Roll the host back to an earlier release tag, code only: deploy/rollback <tag> [--dry-run] [--deployed <rev>].
+# Allowed only when the live database's migrations equal the tag's; every other case is refused.
+# Same checks, kit and single sudo session as deploy/release (see there); the host tooling comes from this
+# checkout's HEAD, since an older tag may predate it.
+exec "$(dirname "${BASH_SOURCE[0]}")/release" --rollback "$@"

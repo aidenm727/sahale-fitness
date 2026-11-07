@@ -1,0 +1,90 @@
+/*
+ * Sahale v0 — design tokens.
+ *
+ * One deliberate theme: warm graphite ("slate at dusk") with an alpenglow accent.
+ * Typography carries most of the hierarchy: a serif for places and titles,
+ * a grotesk for interface, a mono for state and data.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces — warm, low-chroma graphite */
+  --bg: #111213;
+  --bg-rail: #0d0e0f;
+  --surface: #151617;
+  --raised: #1a1b1d;
+  --raised-2: #202124;
+  --raised-3: #27292c;
+  --overlay: rgba(8, 8, 9, 0.62);
+
+  /* Lines */
+  --line: rgba(236, 228, 214, 0.075);
+  --line-2: rgba(236, 228, 214, 0.12);
+  --line-3: rgba(236, 228, 214, 0.2);
+
+  /* Ink */
+  --text: #ece6da;
+  --text-2: #b3ac9f;
+  --text-3: #8a847a;
+  --text-4: #5f5b55;
+
+  /* Brand accent — alpenglow */
+  --accent: #f0a281;
+  --accent-ink: #1a0f0a;
+  --accent-wash: rgba(240, 162, 129, 0.1);
+  --accent-line: rgba(240, 162, 129, 0.35);
+
+  /* Domain identity (validated as an adjacent set on --surface; always paired with a label) */
+
+  /* Status — reserved for state, always with an icon or word */
+  --ok: #8db978;
+  --warn: #e3b450;
+  --bad: #e5654f;
+  --ok-wash: rgba(141, 185, 120, 0.1);
+  --warn-wash: rgba(227, 180, 80, 0.1);
+  --bad-wash: rgba(229, 101, 79, 0.1);
+
+  /* Type */
+  --font-display: 'Newsreader Variable', 'Iowan Old Style', Georgia, serif;
+  --font-ui: 'Instrument Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --fs-micro: 10.5px;
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs-base: 13.5px;
+  --fs-md: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 24px;
+  --fs-2xl: 32px;
+  --fs-3xl: 44px;
+
+  /* Space */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 40px;
+  --s-9: 56px;
+  --s-10: 72px;
+
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 12px;
+
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -8px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-3: 0 24px 80px -12px rgba(0, 0, 0, 0.75), 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  --ease: cubic-bezier(0.2, 0.7, 0.1, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --rail-w: 252px;
+  --topbar-h: 52px;
+
+  /* The app's color: active marks, meters, chart series. */
+  --domain: #d06b42;
+}

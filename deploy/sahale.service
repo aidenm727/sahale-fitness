@@ -1,0 +1,49 @@
+# Sahale runtime as a system service. Install: see deploy/README.md.
+# Site settings (public origin, owner login) live in /etc/sahale/sahale.env, not here.
+[Unit]
+Description=Sahale runtime
+Documentation=file:///opt/sahale/app/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sahale
+Group=sahale
+WorkingDirectory=/opt/sahale/app
+Environment=NODE_ENV=production
+Environment=SAHALE_SERVE_STATIC=1
+Environment=SAHALE_DATA_DIR=/var/lib/sahale
+Environment=SAHALE_PORT=4310
+EnvironmentFile=/etc/sahale/sahale.env
+# Same as `npm start`, without npm in the process tree.
+ExecStart=/opt/node/bin/node /opt/sahale/app/node_modules/tsx/dist/cli.mjs server/index.ts
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+# /var/lib/sahale, owned by sahale, mode 0700. Nothing else is writable.
+StateDirectory=sahale
+StateDirectoryMode=0700
+UMask=0077
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+ProtectHostname=yes
+ProtectClock=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

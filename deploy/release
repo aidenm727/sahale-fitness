@@ -1,0 +1,240 @@
+#!/bin/bash
+# Release a tagged commit to the always-on host, from the laptop. Code-only releases: the tag's migrations must
+# equal the deployed ones. Every check that can run here runs before anything reaches the host.
+#
+#   deploy/release <tag> [--dry-run] [--deployed <rev>]
+#   deploy/rollback <tag> [--dry-run] [--deployed <rev>]      (same script, rollback mode)
+#
+# --dry-run    runs the laptop checks (git, origin, gh), builds the kit locally and prints every command that
+#              would run on the host, then stops. Nothing is sent: no ssh, no scp. Every refusal is listed
+#              (REFUSE), the plan is printed anyway, and the exit status is 1 if anything would refuse.
+# --deployed   dry run only: the commit to check against, since a dry run does not ask the host. Default: the
+#              last release this laptop recorded (~/.local/state/sahale/releases.log), if any.
+#
+# Host settings live outside git in ~/.config/sahale/release.env (see deploy/release.env.example).
+# The host part runs as one `ssh -t <host> sudo bash …/release-host.sh` session: one sudo prompt per run.
+set -euo pipefail
+
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=release-lib.sh
+source "$HERE/release-lib.sh"   # step/ok/fail/expect only; nothing host-side runs here
+
+usage() { echo "usage: deploy/release <tag> [--dry-run] [--deployed <rev>]   |   deploy/rollback <tag> [--dry-run] [--deployed <rev>]" >&2; exit 2; }
+MODE=release DRY=0 TAG='' DEPLOYED_REV=''
+while (($#)); do
+  case $1 in
+    --rollback) MODE=rollback; shift ;;
+    --dry-run) DRY=1; shift ;;
+    --deployed) DEPLOYED_REV=${2:-}; shift 2 || usage ;;
+    -*) usage ;;
+    *) [[ -z $TAG ]] || usage; TAG=$1; shift ;;
+  esac
+done
+[[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || usage
+[[ -z $DEPLOYED_REV || $DRY == 1 ]] || { echo "--deployed is for --dry-run only: a real run reads the deployed commit from the host" >&2; exit 2; }
+
+ENV_FILE=${SAHALE_RELEASE_ENV:-${XDG_CONFIG_HOME:-$HOME/.config}/sahale/release.env}
+STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/sahale
+SSH_HOST='' ADMIN='' HOST_ROOT=''
+if [[ -f $ENV_FILE ]]; then
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    [[ $line =~ ^([A-Z0-9_]+)=(.*)$ ]] || fail "$ENV_FILE: not key=value: $line"
+    k=${BASH_REMATCH[1]} v=${BASH_REMATCH[2]}
+    [[ $v =~ ^\"(.*)\"$ ]] && v=${BASH_REMATCH[1]}
+    case $k in
+      SAHALE_SSH) SSH_HOST=$v ;;
+      SAHALE_ADMIN) ADMIN=$v ;;
+      SAHALE_HOST_ROOT) HOST_ROOT=$v ;;
+      *NOPASSWD* | *ASKPASS* | SUDO*) fail "$ENV_FILE: $k: passwordless or scripted sudo is not supported; every run asks for the password once (report 005 §3: that needs the root-owned helper first)" ;;
+      *) fail "$ENV_FILE: unknown key $k" ;;
+    esac
+  done < "$ENV_FILE"
+elif [[ $DRY == 0 ]]; then
+  fail "$ENV_FILE missing: copy deploy/release.env.example there and fill in the ssh alias and admin user"
+fi
+if [[ $DRY == 1 && -z $SSH_HOST ]]; then SSH_HOST='<ssh alias>'; ADMIN=${ADMIN:-<admin>}; note "no $ENV_FILE: the plan shows placeholders"; fi
+[[ $SSH_HOST == '<ssh alias>' || $SSH_HOST =~ ^[A-Za-z0-9._@-]+$ ]] || fail "$ENV_FILE: SAHALE_SSH must be an ssh alias"
+[[ $ADMIN == '<admin>' || $ADMIN =~ ^[a-z_][a-z0-9_-]*$ ]] || fail "$ENV_FILE: SAHALE_ADMIN must be a user name"
+[[ -z $HOST_ROOT || ($HOST_ROOT == /* && $HOST_ROOT != /) ]] || fail "$ENV_FILE: SAHALE_HOST_ROOT is for fake hosts only (an absolute temp dir)"
+
+REPO_DIR=$(git -C "$HERE" rev-parse --show-toplevel)
+G() { git -C "$REPO_DIR" "$@"; }
+q() { printf '%q' "$1"; }
+sq() { local s=${1//\'/\'\\\'\'}; printf "'%s'" "$s"; }   # for display: one single-quoted word
+# A check that refuses the release: a real run stops at the first; a dry run lists them all, prints the plan
+# anyway and exits 1, so one dry run shows every blocker.
+REFUSALS=0
+refuse() { if [[ $DRY == 0 ]]; then fail "$@"; fi; REFUSALS=$((REFUSALS + 1)); printf '  REFUSE %s\n' "$*"; }
+want() { if [[ "$3" == "$2" ]]; then ok "$1 ($3)"; else refuse "$1: expected '$2', got '$3'"; fi; }
+# Every command that reaches the host goes through here. A dry run never gets this far.
+remote() { [[ $DRY == 0 ]] || fail "internal: host command in a dry run"; printf '  + %s\n' "$*" >&2; "$@"; }
+
+# ---- 1. laptop preflight: no host access
+step "laptop: $MODE $TAG"
+want "working tree clean ($REPO_DIR)" "" "$(G status --porcelain)"
+[[ $(G cat-file -t "refs/tags/$TAG" 2>/dev/null) == tag ]] || fail "$TAG is not an annotated tag in this clone"
+COMMIT=$(G rev-parse "refs/tags/$TAG^{commit}")
+TAG_OBJ=$(G rev-parse "refs/tags/$TAG")
+ok "$TAG is an annotated tag on ${COMMIT:0:12}"
+remote_tags=$(G ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}") || fail "cannot read origin's tags"
+r_obj=$(awk -v r="refs/tags/$TAG" '$2 == r { print $1 }' <<<"$remote_tags")
+r_commit=$(awk -v r="refs/tags/$TAG^{}" '$2 == r { print $1 }' <<<"$remote_tags")
+if [[ -z $r_obj ]]; then
+  refuse "$TAG is not on origin: push it first (git push origin $TAG)"
+else
+  want "origin's $TAG is the same tag object" "$TAG_OBJ" "$r_obj"
+  want "origin's $TAG peels to the same commit" "$COMMIT" "$r_commit"
+fi
+
+if [[ $MODE == release ]]; then
+  runs=$(cd "$REPO_DIR" && gh run list --commit "$COMMIT" --workflow CI --json status,conclusion,url --limit 20) || fail "gh run list failed"
+  ci=$(python3 -c '
+import json, sys
+runs = json.load(sys.stdin)
+if not runs: print("missing"); sys.exit()
+r = runs[0]
+print(r["conclusion"] if r["status"] == "completed" else r["status"], r.get("url", ""))' <<<"$runs")
+  read -r ci_state ci_url <<<"$ci"
+  if [[ $ci_state == success ]]; then ok "CI green on ${COMMIT:0:12} ($ci_url)"
+  else refuse "CI on ${COMMIT:0:12} is '$ci_state', not success: tag only after a green run on the exact commit${ci_url:+ ($ci_url)}"; fi
+
+  want=${TAG#v}
+  pkg=$(G show "$COMMIT:package.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+  lock=$(G show "$COMMIT:package-lock.json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["version"], d["packages"][""]["version"])')
+  rt=$(G show "$COMMIT:server/routes/runtime.ts" | sed -n "s/^export const VERSION = '\(.*\)'$/\1/p")
+  want "versions at $TAG (package.json, lockfile x2, runtime)" "$want $want $want $want" "$pkg $lock $rt"
+
+  for f in release-host.sh release-lib.sh sahale-sqlite.py; do
+    G cat-file -e "$COMMIT:deploy/$f" 2>/dev/null || fail "$TAG has no deploy/$f: it predates this release tool"
+  done
+  ok "$TAG carries the host tooling it will run (deploy/release-host.sh, release-lib.sh, sahale-sqlite.py)"
+fi
+
+# ---- 2. what is deployed, and the tag against it
+read_cmd="f=$(q "$HOST_ROOT/opt/sahale/DEPLOYED"); if [ -f \"\$f\" ]; then cat \"\$f\"; fi; printf 'git_commit=%s\n' \"\$(git -C $(q "$HOST_ROOT/opt/sahale/app") rev-parse HEAD)\""
+DEP=''
+if [[ $DRY == 1 ]]; then
+  if [[ -n $DEPLOYED_REV ]]; then
+    DEP=$(G rev-parse --verify --quiet "$DEPLOYED_REV^{commit}") || fail "--deployed $DEPLOYED_REV is not a commit here"
+    note "deployed commit as given: ${DEP:0:12} (not asked of the host)"
+  elif [[ -s $STATE_DIR/releases.log ]]; then
+    DEP=$(tail -n 1 "$STATE_DIR/releases.log" | awk '{ print $4 }')
+    note "deployed commit from this laptop's last recorded release: ${DEP:0:12} (not asked of the host)"
+  else
+    note "deployed commit unknown (a dry run does not ask the host; --deployed <rev> checks against one): the host checks ancestry, migrations and units anyway"
+  fi
+else
+  step "host: what is deployed (read only, no sudo)"
+  deployed=$(remote ssh "$SSH_HOST" "$read_cmd") || fail "could not read the deployed commit from $SSH_HOST"
+  DEP=$(sed -n 's/^git_commit=\([0-9a-f]\{40\}\)$/\1/p' <<<"$deployed")
+  rec=$(sed -n 's/^commit=//p' <<<"$deployed")
+  [[ -n $DEP ]] || fail "no deployed commit in the host's answer"
+  [[ -z $rec || $rec == "$DEP" ]] || fail "the host's DEPLOYED record ($rec) disagrees with /opt/sahale/app ($DEP)"
+  ok "deployed: ${DEP:0:12} $(sed -n 's/^tag=//p' <<<"$deployed")"
+fi
+
+journal_cmp() { # journal_cmp <old rev> <new rev>: same | adds <tags> | fewer <n> | differs
+  python3 - <(G show "$1:server/db/migrations/meta/_journal.json") <(G show "$2:server/db/migrations/meta/_journal.json") <<'PY'
+import json, sys
+old, new = (json.load(open(p))["entries"] for p in sys.argv[1:3])
+key = lambda e: (e["tag"], e["when"])
+if list(map(key, old)) == list(map(key, new)): print("same")
+elif list(map(key, new[:len(old)])) == list(map(key, old)): print("adds", " ".join(e["tag"] for e in new[len(old):]))
+elif list(map(key, old[:len(new)])) == list(map(key, new)): print("fewer", len(old) - len(new))
+else: print("differs")
+PY
+}
+if [[ -n $DEP ]]; then
+  step "$TAG against the deployed ${DEP:0:12}"
+  G cat-file -e "$DEP^{commit}" 2>/dev/null || fail "the deployed commit $DEP is not in this clone: git fetch origin, then run again"
+  [[ $DEP != "$COMMIT" ]] || refuse "$TAG (${COMMIT:0:7}) is already deployed"
+  if [[ $MODE == release ]]; then
+    if G merge-base --is-ancestor "$DEP" "$COMMIT"; then ok "deployed ${DEP:0:12} is an ancestor of $TAG"
+    else refuse "the deployed commit ${DEP:0:12} is not an ancestor of $TAG: refusing (releasing it would drop deployed changes; merge first)"; fi
+  fi
+  if [[ $(G rev-parse "$DEP:server/db/migrations") == "$(G rev-parse "$COMMIT:server/db/migrations")" ]]; then
+    ok "server/db/migrations identical: code only"
+  else
+    cmp=$(journal_cmp "$DEP" "$COMMIT")
+    case $MODE:$cmp in
+      release:adds*) refuse "$TAG adds migrations (${cmp#adds }): this tool releases code only; migration releases wait (report 005 §5)" ;;
+      release:*) refuse "$TAG changes server/db/migrations against the deployed commit ($cmp): refusing" ;;
+      rollback:fewer*) refuse "the deployed database has ${cmp#fewer } more migration(s) than $TAG: rolling back across a migration needs the restore path, which this tool refuses (report 005 §5)" ;;
+      rollback:adds*) refuse "$TAG has migrations the deployed commit lacks (${cmp#adds }): that is a release, not a rollback" ;;
+      *) refuse "$TAG's server/db/migrations differs from the deployed commit's ($cmp): not code-only" ;;
+    esac
+  fi
+  units_ok=1
+  for f in $UNIT_FILES; do
+    [[ $(G rev-parse "$DEP:deploy/$f") == "$(G rev-parse "$COMMIT:deploy/$f")" ]] \
+      || { units_ok=0; refuse "deploy/$f differs between the deployed commit and $TAG: a unit-file change is a separate, manual step"; }
+  done
+  ((units_ok == 0)) || ok "unit files identical ($UNIT_FILES)"
+fi
+
+# ---- 3. the kit: the tag as a bundle, the host tooling, checksums
+step "kit"
+if [[ $MODE == release ]]; then KIT_NAME=$TAG TOOL_REV=$COMMIT; else KIT_NAME=rollback-$TAG TOOL_REV=$(G rev-parse HEAD); fi
+W=$(mktemp -d "${TMPDIR:-/tmp}/sahale-kit.XXXXXX")
+trap 'rm -rf -- "$W"' EXIT
+G bundle create -q "$W/$TAG.bundle" "refs/tags/$TAG"
+for f in release-host.sh release-lib.sh sahale-sqlite.py; do G show "$TOOL_REV:deploy/$f" > "$W/$f"; done
+(cd "$W" && sha256sum "$TAG.bundle" release-host.sh release-lib.sh sahale-sqlite.py > SHA256SUMS)
+SUMS=$(sha256sum "$W/SHA256SUMS" | cut -d' ' -f1)
+indent < "$W/SHA256SUMS"
+ok "kit built from $([[ $MODE == release ]] && echo "$TAG" || echo "this checkout's HEAD ${TOOL_REV:0:12}") (SHA256SUMS ${SUMS:0:16}…)"
+
+# ---- 4. the host plan
+REL=sahale-release/$KIT_NAME
+HOST_ARGS=("$MODE" "$TAG" "$COMMIT" "$SUMS" --admin "$ADMIN")
+[[ -z $HOST_ROOT ]] || HOST_ARGS+=(--root "$HOST_ROOT")
+host_cmd="sudo bash $REL/release-host.sh$(printf ' %q' "${HOST_ARGS[@]}")"
+mkdir_cmd="mkdir -p -m 0700 $REL"   # existing folders keep their mode
+verify_cmd="cd $REL && sha256sum -c SHA256SUMS"
+log_cmd="tail -n 1 $(q "$HOST_ROOT/opt/sahale/releases.log")"
+FILES=("$W/$TAG.bundle" "$W/release-host.sh" "$W/release-lib.sh" "$W/sahale-sqlite.py" "$W/SHA256SUMS")
+step "host plan ($SSH_HOST, admin $ADMIN)"
+cat <<EOF
+  from the laptop, in order:
+    ssh $SSH_HOST $(sq "$read_cmd")
+    ssh $SSH_HOST $(sq "$mkdir_cmd")
+    scp -p -q $TAG.bundle release-host.sh release-lib.sh sahale-sqlite.py SHA256SUMS $SSH_HOST:$REL/
+    ssh $SSH_HOST $(sq "$verify_cmd")
+    ssh -t $SSH_HOST $(sq "$host_cmd")        <- the one sudo prompt
+    ssh $SSH_HOST $(sq "$log_cmd")            -> appended to $STATE_DIR/releases.log
+  on the host, inside that sudo session ($REL/release-host.sh $MODE):
+EOF
+bash "$W/release-host.sh" plan "${HOST_ARGS[@]}"
+
+if [[ $DRY == 1 ]]; then
+  if ((REFUSALS)); then
+    printf '\ndry run: %d checks passed, %d would refuse this %s (REFUSE above); nothing was sent to the host.\n' "$PASS" "$REFUSALS" "$MODE"
+    exit 1
+  fi
+  printf '\ndry run: %d checks passed; nothing was sent to the host.\n' "$PASS"
+  exit 0
+fi
+
+# ---- 5. transfer, then the one sudo session
+step "transfer"
+remote ssh "$SSH_HOST" "$mkdir_cmd"
+remote scp -p -q "${FILES[@]}" "$SSH_HOST:$REL/"
+remote ssh "$SSH_HOST" "$verify_cmd" | indent || fail "the kit on the host does not match SHA256SUMS"
+ok "kit on the host verified"
+
+step "host: $MODE $TAG (sudo asks for your password once)"
+rc=0
+remote ssh -t "$SSH_HOST" "$host_cmd" || rc=$?
+if ((rc != 0)); then
+  printf '\n%s %s did not complete (exit %s). The host output above says what is running now (look for SWAPPED BACK or STOPPED).\n' "$MODE" "$TAG" "$rc"
+  exit 1
+fi
+
+step "record on the laptop"
+line=$(remote ssh "$SSH_HOST" "$log_cmd") || fail "could not read the host's releases.log"
+[[ $line == *" $MODE $TAG $COMMIT "*"result=ok" ]] || fail "the host's last releases.log line is not this $MODE: $line"
+mkdir -p "$STATE_DIR"
+printf '%s\n' "$line" >> "$STATE_DIR/releases.log"
+ok "$STATE_DIR/releases.log: $line"
+printf '\n%s %s done: %d checks passed here (the host counted its own above).\n' "$MODE" "$TAG" "$PASS"

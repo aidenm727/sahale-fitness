@@ -1,0 +1,51 @@
+/**
+ * Built-in exercise library (origin "library"). Inserted when missing, never
+ * overwritten, never removed by clearing demo data — owner sessions refer to it.
+ */
+import type { Exercise } from '../../shared/fitness/types'
+
+export const LIBRARY: Omit<Exercise, 'origin'>[] = [
+  { id: 'back-squat', name: 'Back Squat', short: 'Squat', pattern: 'Squat', main: true, bodyweight: false, equipment: 'Barbell · high bar', cues: ['Big breath into the belt before the unrack', 'Spread the floor; knees track over toes', 'Drive chest-first out of the hole'] },
+  { id: 'bench-press', name: 'Bench Press', short: 'Bench', pattern: 'Press', main: true, bodyweight: false, equipment: 'Barbell · medium grip', cues: ['Pause the first rep of every set', 'Shoulder blades pinned, feet quiet', 'Bar path back toward the rack'] },
+  { id: 'deadlift', name: 'Deadlift', pattern: 'Hinge', main: true, bodyweight: false, equipment: 'Barbell · conventional', cues: ['Pull the slack out before the floor', 'Push the floor away, don’t yank', 'Lock out with glutes, not lower back'] },
+  { id: 'overhead-press', name: 'Overhead Press', short: 'OHP', pattern: 'Press', main: true, bodyweight: false, equipment: 'Barbell · standing', cues: ['Squeeze glutes — no layback', 'Head through once the bar passes the forehead'] },
+  { id: 'rdl', name: 'Romanian Deadlift', short: 'RDL', pattern: 'Hinge', main: false, bodyweight: false, equipment: 'Barbell', cues: ['Soft knees, hips back', 'Stop when the hips stop'] },
+  { id: 'split-squat', name: 'Bulgarian Split Squat', pattern: 'Squat', main: false, bodyweight: false, equipment: 'Dumbbells', cues: ['Controlled depth', 'Front shin stays vertical-ish'] },
+  { id: 'leg-curl', name: 'Seated Leg Curl', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Machine', cues: ['Full stretch, 2s eccentric'] },
+  { id: 'leg-raise', name: 'Hanging Leg Raise', pattern: 'Core', main: false, bodyweight: true, equipment: 'Bar', cues: ['No swing; posterior tilt at the top'] },
+  { id: 'pull-up', name: 'Weighted Pull-up', short: 'Pull-up', pattern: 'Pull', main: false, bodyweight: false, equipment: 'Belt + plates', cues: ['Dead hang start', 'Chest to bar intent'] },
+  { id: 'incline-db', name: 'Incline DB Press', pattern: 'Press', main: false, bodyweight: false, equipment: 'Dumbbells · 30°', cues: ['Elbows ~45°', 'Stretch at the bottom'] },
+  { id: 'cs-row', name: 'Chest-supported Row', pattern: 'Pull', main: false, bodyweight: false, equipment: 'Dumbbells', cues: ['Lead with elbows', 'Pause at the top'] },
+  { id: 'lateral-raise', name: 'Lateral Raise', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Dumbbells', cues: ['Pinkies slightly up', 'Stop at shoulder height'] },
+  { id: 'front-squat', name: 'Front Squat', pattern: 'Squat', main: false, bodyweight: false, equipment: 'Barbell', cues: ['Elbows high', 'Stay tall'] },
+  { id: 'walking-lunge', name: 'Walking Lunge', pattern: 'Squat', main: false, bodyweight: false, equipment: 'Dumbbells', cues: ['Long stride, controlled knee'] },
+  { id: 'back-ext', name: 'Back Extension', pattern: 'Hinge', main: false, bodyweight: false, equipment: '45° bench + plate', cues: ['Round down, extend with glutes'] },
+  { id: 'ab-wheel', name: 'Ab Wheel', pattern: 'Core', main: false, bodyweight: true, equipment: 'Wheel', cues: ['Ribs down the whole way'] },
+  { id: 'barbell-row', name: 'Barbell Row', pattern: 'Pull', main: false, bodyweight: false, equipment: 'Barbell', cues: ['Torso ~30°', 'Row to the belly button'] },
+  { id: 'cg-bench', name: 'Close-grip Bench', pattern: 'Press', main: false, bodyweight: false, equipment: 'Barbell', cues: ['Index fingers on the smooth'] },
+  { id: 'lat-pulldown', name: 'Lat Pulldown', pattern: 'Pull', main: false, bodyweight: false, equipment: 'Cable', cues: ['Drive elbows to pockets'] },
+  { id: 'face-pull', name: 'Face Pull', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Cable · rope', cues: ['Pull apart at the end'] },
+  { id: 'leg-press', name: 'Leg Press', pattern: 'Squat', main: false, bodyweight: false, equipment: 'Machine', cues: ['Low back stays on the pad'] },
+  { id: 'goblet-squat', name: 'Goblet Squat', pattern: 'Squat', main: false, bodyweight: false, equipment: 'Dumbbell', cues: ['Elbows inside the knees'] },
+  { id: 'db-row', name: 'One-arm DB Row', pattern: 'Pull', main: false, bodyweight: false, equipment: 'Dumbbell + bench', cues: ['Pull to the hip'] },
+  { id: 'dip', name: 'Dip', pattern: 'Press', main: false, bodyweight: true, equipment: 'Parallel bars', cues: ['Slight forward lean'] },
+  { id: 'plank', name: 'Plank', pattern: 'Core', main: false, bodyweight: true, equipment: 'Floor', cues: ['Squeeze glutes, ribs down'] },
+  // Added in v0.1.1 — common hypertrophy movements.
+  { id: 'standing-calf-raise', name: 'Standing Calf Raise', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Machine', cues: ['Full stretch at the bottom, pause', 'Up onto the big toe'] },
+  { id: 'seated-calf-raise', name: 'Seated Calf Raise', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Machine', cues: ['Pause in the stretch'] },
+  { id: 'leg-extension', name: 'Leg Extension', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Machine', cues: ['Squeeze at the top, control down'] },
+  { id: 'hack-squat', name: 'Hack Squat', pattern: 'Squat', main: false, bodyweight: false, equipment: 'Machine', cues: ['Knees forward, full depth'] },
+  { id: 'hip-thrust', name: 'Hip Thrust', pattern: 'Hinge', main: false, bodyweight: false, equipment: 'Barbell + bench', cues: ['Chin tucked, ribs down', 'Pause at lockout'] },
+  { id: 'lying-leg-curl', name: 'Lying Leg Curl', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Machine', cues: ['Hips pinned to the pad'] },
+  { id: 'incline-bench', name: 'Incline Bench Press', pattern: 'Press', main: false, bodyweight: false, equipment: 'Barbell · 30°', cues: ['Bar to upper chest', 'Shoulder blades pinned'] },
+  { id: 'db-shoulder-press', name: 'Seated DB Shoulder Press', pattern: 'Press', main: false, bodyweight: false, equipment: 'Dumbbells', cues: ['Forearms vertical', 'Don’t clang at the top'] },
+  { id: 'cable-fly', name: 'Cable Fly', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Cable', cues: ['Soft elbows, hug a tree'] },
+  { id: 'seated-cable-row', name: 'Seated Cable Row', pattern: 'Pull', main: false, bodyweight: false, equipment: 'Cable', cues: ['Chest up, pull to the belly'] },
+  { id: 'chin-up', name: 'Chin-up', pattern: 'Pull', main: false, bodyweight: true, equipment: 'Bar', cues: ['Full hang, chin over the bar'] },
+  { id: 'rear-delt-fly', name: 'Rear Delt Fly', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Dumbbells or machine', cues: ['Lead with the pinkies'] },
+  { id: 'cable-lateral-raise', name: 'Cable Lateral Raise', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Cable', cues: ['Cable behind the body', 'Stop at shoulder height'] },
+  { id: 'db-curl', name: 'Dumbbell Curl', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Dumbbells', cues: ['Elbows still', 'Supinate at the top'] },
+  { id: 'hammer-curl', name: 'Hammer Curl', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Dumbbells', cues: ['Neutral grip, no swing'] },
+  { id: 'triceps-pushdown', name: 'Triceps Pushdown', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Cable', cues: ['Elbows pinned to the sides'] },
+  { id: 'overhead-triceps-ext', name: 'Overhead Triceps Extension', pattern: 'Accessory', main: false, bodyweight: false, equipment: 'Cable or dumbbell', cues: ['Deep stretch behind the head'] },
+]

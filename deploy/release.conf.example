@@ -1,0 +1,30 @@
+# /etc/sahale/release.conf on the host (root:root 0644; no secrets belong here). Read by
+# deploy/release-host.sh and deploy/cp3.sh as key=value lines; never sourced. Replace every <…>.
+
+# Local time the release and cp3 refuse to run in: the nightly snapshot and Restic jobs.
+QUIET_WINDOW=0230-0430
+# Seconds to wait for health {"ok":true,"db":"ready"} after a start (optional, default 90).
+READY_TIMEOUT=90
+
+# The host's Restic jobs that back up /var/lib/sahale/snapshots (systemd units and the scripts they run;
+# cp3 reads each script's PASSWORD_FILE= line to open the repository read-only).
+RESTIC_LOCAL_UNIT=<local-backup>.service
+RESTIC_B2_UNIT=<offsite-backup>.service
+RESTIC_LOCAL_SCRIPT=/home/<admin>/<path>/restic-backup.sh
+RESTIC_B2_SCRIPT=/home/<admin>/<path>/restic-backup-b2.sh
+RESTIC_LOCAL_REPO=/home/<admin>/<path>/restic-repo
+RESTIC_B2_REPO=b2:<bucket>:<path>
+# The file exporting B2_ACCOUNT_ID / B2_ACCOUNT_KEY for the off-site repository (read by restic, never printed).
+RESTIC_B2_ENV=/home/<admin>/<path>/backblaze-b2.env
+RESTIC_LOCAL_STAMP=/home/<admin>/<path>/last-successful-backup.txt
+RESTIC_B2_STAMP=/home/<admin>/<path>/last-successful-b2-backup.txt
+BACKUPS_JSON=/home/<admin>/<path>/backups.json
+# When each runs (HHMM): the sahale-snapshot.timer, then the two Restic jobs.
+SLOT_SNAPSHOT=0245
+SLOT_LOCAL=0300
+SLOT_B2=0400
+
+# Where cp3.sh overnight writes its logs, and the folders whose newest cp3-overnight-*.log from today must
+# show a pass before a release (the first release may also count the last per-version kit's folder).
+CP3_OUT=/home/<admin>/sahale-release/cp3-overnight
+CP3_GATE_DIRS="/home/<admin>/sahale-release/cp3-overnight"
