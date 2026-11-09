@@ -81,72 +81,77 @@ sudo rm -rf /var/lib/sahale-rehearsal
 systemctl show sahale -p StateDirectory -p StateDirectoryMode   # back to sahale, 0700
 ```
 
-## 2. Cut over (moves the production database)
+## 2. Move an existing database onto the host (moves the production database)
+
+This moves an existing `sahale.db` from another machine (the *source*) onto the host.
 
 The rule throughout: **exactly one** machine has `sahale.db` under that name, a running
-runtime and an active Serve.
+runtime and an active Serve. `<source data dir>` below is the folder the source's runtime used
+(its `SAHALE_DATA_DIR`); `<server>` is the host as `ssh`/`scp` know it.
 
-On the **laptop**:
+On the **source**:
 
 1. No workout in progress (or finish it). Stop every Sahale process (`npm start`,
-   `npm run dev`); check with `ps -eo pid,args | grep -E 'tsx|server/index'`, that no process
-   has the database open, and that `~/.local/share/sahale/sahale.db-wal` is absent or 0 bytes.
+   `npm run dev`, a service); check with `ps -eo pid,args | grep -E 'tsx|server/index'`, that no
+   process has the database open, and that `<source data dir>/sahale.db-wal` is absent or 0 bytes.
    A read-only open (`sahale-sqlite.py snapshot` or `check` on a stopped WAL database) leaves an
    empty `-wal` and a `-shm` behind; those are harmless. A non-empty `-wal` holds committed data
    not yet in `sahale.db`: start and cleanly stop Sahale once before copying anything.
-2. Windows PowerShell: `tailscale serve reset` (the phone can no longer reach the laptop).
-3. Copy and check:
+2. Turn off the source's Serve for Sahale (`tailscale serve status` shows it; `tailscale serve reset`
+   if it is the only one), so the phone can no longer reach the source.
+3. Copy and check, from a checkout of this repository:
    ```bash
-   cd ~/src/sahale-fitness
-   python3 deploy/sahale-sqlite.py snapshot ~/.local/share/sahale/sahale.db ~/sahale-migration.db
-   python3 deploy/sahale-sqlite.py check ~/sahale-migration.db | tee ~/sahale-migration.check
-   sha256sum ~/sahale-migration.db
+   python3 deploy/sahale-sqlite.py snapshot <source data dir>/sahale.db ~/sahale-move.db
+   python3 deploy/sahale-sqlite.py check ~/sahale-move.db | tee ~/sahale-move.check
+   sha256sum ~/sahale-move.db
    ```
-   Expect `integrity ok`, `active workouts 0`, and your recent sessions listed. Keep a
-   second copy of `sahale-migration.db` outside WSL.
-4. `scp ~/sahale-migration.db ~/sahale-migration.check <server>:` and compare `sha256sum` there.
-   Copy nothing else: never `backups/`.
+   `snapshot` writes one self-contained file (nothing pending in a `-wal`). Expect
+   `integrity ok`, `active workouts 0`, and your recent sessions listed. Keep a second copy of
+   `sahale-move.db` on another disk until step 8 passes.
+4. `scp ~/sahale-move.db ~/sahale-move.check <server>:` and compare `sha256sum` there.
+   Copy nothing else: never `backups/`, `-wal` or `-shm`.
 
 On the **server**:
 
 5. Install it and start:
    ```bash
    sudo install -d -o sahale -g sahale -m 0700 /var/lib/sahale
-   sudo install -o sahale -g sahale -m 0600 ~/sahale-migration.db /var/lib/sahale/sahale.db
+   sudo install -o sahale -g sahale -m 0600 ~/sahale-move.db /var/lib/sahale/sahale.db
    sudo stat -c '%a %U %n' /var/lib/sahale /var/lib/sahale/sahale.db   # 700 sahale, 600 sahale
    sudo ls -la /var/lib/sahale                     # no stale -wal/-shm
    sudo systemctl enable --now sahale
    journalctl -u sahale -n 20 --no-pager           # database ready, no "applied …"; private https://…:8443
    ```
-6. Compare with the laptop's report (a snapshot taken now, so the numbers come from a
+6. Compare with the source's report (a snapshot taken now, so the numbers come from a
    consistent read):
    ```bash
    sudo -u sahale python3 /opt/sahale/app/deploy/sahale-sqlite.py snapshot /var/lib/sahale/sahale.db /var/lib/sahale/verify.db
-   sudo -u sahale python3 /opt/sahale/app/deploy/sahale-sqlite.py check /var/lib/sahale/verify.db | diff ~/sahale-migration.check - && echo identical
+   sudo -u sahale python3 /opt/sahale/app/deploy/sahale-sqlite.py check /var/lib/sahale/verify.db | diff ~/sahale-move.check - && echo identical
    sudo rm /var/lib/sahale/verify.db
    ```
    Go on only if they are identical.
 7. Open the door: `sudo tailscale serve --bg --https=8443 http://127.0.0.1:4310`, then
    `tailscale serve status`. Check that the services behind the existing reverse proxy still load.
 8. Phone: `https://<host>.<tailnet>.ts.net:8443/history` shows your latest
-   workout and its sets. Add it to the Home Screen; delete the old laptop icon. (The tailnet
-   policy must let the phone reach the server on 8443.)
+   workout and its sets. Add it to the Home Screen and remove any icon for the old address. (The
+   tailnet policy must let the phone reach the server on 8443.)
 
-Back on the **laptop**, retire the old copy so it can't be written again:
+Back on the **source**, retire the old copy so it can't be written again (with the runtime still
+stopped):
 
 ```bash
-mv ~/.local/share/sahale/sahale.db ~/.local/share/sahale/sahale.db.migrated-$(date +%Y%m%d)
-chmod 0400 ~/.local/share/sahale/sahale.db.migrated-*
+mv <source data dir>/sahale.db <source data dir>/sahale.db.moved-$(date +%Y%m%d)
+chmod 0400 <source data dir>/sahale.db.moved-*
 ```
 
-From now on develop with plain `npm run dev`: with `SAHALE_DATA_DIR` unset it uses `.data/dev` in the
-checkout, and the runtime refuses any real store (including `~/.local/share/sahale*`) outside production
-unless `SAHALE_ALLOW_DATA_DIR` names the exact path.
+If the source is also your development machine, develop with plain `npm run dev`: with
+`SAHALE_DATA_DIR` unset it uses `.data/dev` in the checkout, and outside production the runtime
+refuses the known real stores unless `SAHALE_ALLOW_DATA_DIR` names the exact path.
 
 **Rollback.** Before anything new is logged on the server: `sudo tailscale serve --https=8443 off`,
-`sudo systemctl disable --now sahale`, rename the laptop file back, start the laptop and its
+`sudo systemctl disable --now sahale`, rename the source's file back, start the source and its
 Serve. After something new was logged: do the same, but first move the server's data back
-the way it came (step 3 with the paths reversed), then rename the server's copy aside.
+the way it came (steps 1, 3 and 4 with the machines reversed), then rename the server's copy aside.
 
 ## 3. Backups, then prove the restore
 
@@ -249,7 +254,4 @@ ssh -t <host> 'sudo bash /opt/sahale/app/deploy/cp3.sh overnight'
 It checks, read-only, that last night's snapshot and both Restic jobs ran in their slots and hold tonight's
 copy, and that the snapshot has the deployed commit's schema. The commit and migration count come from
 `/opt/sahale/DEPLOYED` (or, before the first `deploy/release`, from `git rev-parse` in `/opt/sahale/app` and its
-migration journal). A pass ends `overnight: N checks passed.` and is the gate the next release checks. The
-per-version kit copies (`cp3-v012.sh`, `cp3-v020.sh`, …) are superseded; leave them where they are.
-Until the first `deploy/release`, the deployed tree has no `deploy/cp3.sh`: run the last kit's
-(`~/sahale-release/v020/cp3-v020.sh overnight`) and list its log folder in `CP3_GATE_DIRS`.
+migration journal). A pass ends `overnight: N checks passed.` and is the gate the next release checks.

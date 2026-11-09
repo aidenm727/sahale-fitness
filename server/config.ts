@@ -68,7 +68,7 @@ function isRealStore(path: string): boolean {
 
 /**
  * Outside production, never open a real store by accident. The only way past is naming the exact
- * resolved path in SAHALE_ALLOW_DATA_DIR, for the pilot and trial scripts that mean it.
+ * resolved path in SAHALE_ALLOW_DATA_DIR, for a deliberate, one-off run against that store.
  */
 function guardDataDir(env: NodeJS.ProcessEnv, dataDir: string): void {
   const real = realish(dataDir)

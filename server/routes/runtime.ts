@@ -6,7 +6,7 @@ import { backupDatabase } from '../db'
 import * as t from '../db/schema'
 import { AppError } from '../errors'
 
-export const VERSION = '0.3.0'
+export const VERSION = '0.3.1'
 
 export async function registerRuntimeRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/runtime/health', async () => ({ ok: true, db: ctx.dbStatus.state }))

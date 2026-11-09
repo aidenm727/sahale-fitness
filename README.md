@@ -1,7 +1,6 @@
 # Sahale Fitness
 
-**Status:** v0.3.0, running in production for one owner. No new features are planned. Seven orphaned
-tables are a known leftover (see [Migrations](#migrations)).
+**Status:** v0.3.1, running in production for one owner. No new features are planned.
 
 A single-owner, set-by-set workout logger with a rest timer. You keep a training block of reusable
 workouts, start one when you get to the gym, log what you actually lifted, and finish it into

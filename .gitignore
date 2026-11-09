@@ -52,6 +52,3 @@ id_ed25519.*
 
 # Local development data (per checkout)
 .data/
-
-# Close-out scripts for GitHub writes (run by the owner; not committed)
-.claude/out/
