@@ -153,6 +153,7 @@ printf '[{"status":"%s","conclusion":"%s","url":"https://ci.example.invalid/%s"}
 EOF
 
 export PATH=$BIN:$PATH HOME=$T/home
+unset XDG_CONFIG_HOME XDG_STATE_HOME   # CI runners set these; release must read the fake home
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 for c in ssh scp sudo systemctl tailscale restic gh; do [[ $(command -v $c) == "$BIN/$c" ]] || die "$c is not the stub"; done
 
